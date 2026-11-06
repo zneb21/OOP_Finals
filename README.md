@@ -24,7 +24,6 @@ A casino-style **Blackjack** card game written in **Java** with a **Swing GUI**.
 9. [OOP Design](#oop-design)
 10. [Testing](#testing)
 11. [Limitations and Future Improvements](#limitations-and-future-improvements)
-12. [AI Disclosure](#ai-disclosure)
 
 ## Team Members
 
@@ -281,10 +280,6 @@ Run `TestCases.java` to check the game rules. Current result: **13 passed, 0 fai
 - Support more than one player at the table.
 - Use more than one deck, like real casinos do.
 - Add card images and sound effects.
-
-## AI Disclosure
-
-AI tools (Claude) were used during development to help with code structure, the GUI layout, debugging and documentation. All members reviewed the code and are able to explain how every part of it works.
 
 ---
 
