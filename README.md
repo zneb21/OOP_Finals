@@ -68,13 +68,9 @@ A casino-style **Blackjack** card game written in **Java** with a **Swing GUI**.
 
 ## Screenshots
 
-| Start of the game | Player's turn |
+| Player's turn | Round result |
 |---|---|
-| ![Start](docs/screenshots/1_start.png) | ![Player turn](docs/screenshots/2_player_turn.png) |
-
-| Round result | Round history |
-|---|---|
-| ![Round over](docs/screenshots/3_round_over.png) | ![History](docs/screenshots/4_history.png) |
+| ![Player turn](docs/screenshots/2_player_turn.png) | ![Round result](docs/screenshots/3_round_over.png) |
 
 ## Requirements
 
