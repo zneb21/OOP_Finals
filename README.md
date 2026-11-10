@@ -46,8 +46,8 @@ A casino-style **Blackjack** card game written in **Java** with a **Swing GUI**.
 - Keep the game rules separate from the GUI so the rules can be tested on their own.
 
 **Scope:**
-- One human player against one computer dealer, using a single 52-card deck.
-- Betting with chips, Hit, Stand, Double Down, Blackjack payouts, and a round history.
+- One human player against one computer dealer, using two shuffled 52-card decks.
+- Betting with chips, Hit, Stand, Double Down, Split, Blackjack payouts, and a round history.
 - All data is kept in memory while the program runs. Nothing is saved to files or a database.
 
 ## Features
@@ -55,6 +55,7 @@ A casino-style **Blackjack** card game written in **Java** with a **Swing GUI**.
 - Graphical casino table built with Java Swing.
 - Chip buttons (10, 25, 50, 100) to build a bet, with a Clear button.
 - **Hit**, **Stand** and **Double Down** actions. Buttons turn on and off depending on what is allowed.
+- **Split** when the first two cards have the same rank. Each split hand has its own equal bet and turn.
 - The dealer's second card stays face down until the player's turn is over.
 - The dealer draws one card at a time so the player can follow along.
 - Correct Ace handling (counts as 1 or 11 automatically).
@@ -151,6 +152,7 @@ Click **DEAL**. You and the dealer each get 2 cards. One of the dealer's cards i
 | **HIT** | Take another card. You can hit as many times as you want. |
 | **STAND** | Keep your cards and end your turn. |
 | **DOUBLE** | Double your bet, take exactly 1 more card, then stand. Only allowed with your first 2 cards. |
+| **SPLIT** | If your first two cards have the same rank, create two hands with equal bets and play them one at a time. |
 
 If your total goes over 21, you **bust** and lose your bet right away.
 
@@ -195,7 +197,7 @@ OOP_Finals/
     |-- Player.java             The human player
     |-- Dealer.java             The computer dealer
     |-- Hand.java               Cards held by a participant
-    |-- Deck.java               The 52-card deck
+    |-- Deck.java               Two shuffled 52-card packs
     |-- Card.java               One playing card
     |-- RoundResult.java        Result of one round
     |-- InvalidBetException.java   Custom exception for bets
@@ -205,7 +207,7 @@ OOP_Finals/
 | File | Purpose |
 |---|---|
 | `Card.java` | One playing card (rank, suit, face up or down) |
-| `Deck.java` | 52 cards, shuffle and draw |
+| `Deck.java` | Two 52-card packs (104 cards), shuffle and draw |
 | `Hand.java` | Cards held by a participant, and the total (Aces count as 1 or 11) |
 | `Participant.java` | **Abstract** parent of Player and Dealer |
 | `Player.java` | The human player: chips, bet, betting rules |
@@ -250,7 +252,7 @@ The diagrams match the final source code.
 
 ## Testing
 
-Run `TestCases.java` to check the game rules. Current result: **13 passed, 0 failed**.
+Run `TestCases.java` to check the game rules. Current result: **14 passed, 0 failed**.
 
 | # | Test | Expected |
 |---|---|---|
@@ -267,18 +269,18 @@ Run `TestCases.java` to check the game rules. Current result: **13 passed, 0 fai
 | 11 | Double down without enough chips | InvalidBetException |
 | 12 | Each side gets 2 cards on the deal | 2 and 2 |
 | 13 | One round is saved in the history | 1 |
+| 14 | Fresh shoe contains two decks | 104 cards |
 
 ## Limitations and Future Improvements
 
 **Current limitations**
 - Only one player can play against the dealer.
-- Advanced Blackjack moves such as **Split** and **Insurance** are not included.
+- Insurance is not included.
 - Chips and history reset when the program is closed (in-memory only, as required).
 
 **Possible improvements**
-- Add Split and Insurance.
+- Add Insurance.
 - Support more than one player at the table.
-- Use more than one deck, like real casinos do.
 - Add card images and sound effects.
 
 ---

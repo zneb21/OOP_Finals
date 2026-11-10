@@ -53,13 +53,13 @@ public class Card {
    // The suit symbol. Written as unicode escape codes so the file works in any editor (jGRASP, VS Code).
    public String getSuitSymbol() {
       if (suit.equals("Hearts")) {
-         return "♥";
+         return "\u2665";
       } else if (suit.equals("Diamonds")) {
-         return "♦";
+         return "\u2666";
       } else if (suit.equals("Clubs")) {
-         return "♣";
+         return "\u2663";
       } else {
-         return "♠";
+         return "\u2660";
       }
    }
 

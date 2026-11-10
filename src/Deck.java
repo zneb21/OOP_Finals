@@ -1,8 +1,9 @@
 import java.util.ArrayList;
 import java.util.Collections;
 
-// A standard 52-card deck that can be shuffled and drawn from.
+// Two standard 52-card packs shuffled together (104 cards total).
 public class Deck {
+   private static final int NUMBER_OF_DECKS = 2;
    private static final String[] RANKS = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
    private static final String[] SUITS = {"Hearts", "Diamonds", "Clubs", "Spades"};
 
@@ -13,12 +14,14 @@ public class Deck {
       reset();
    }
 
-   // Builds a fresh set of 52 cards and shuffles them.
+   // Builds two fresh 52-card packs and shuffles them together.
    public void reset() {
       cards.clear();
-      for (String suit : SUITS) {
-         for (String rank : RANKS) {
-            cards.add(new Card(rank, suit));
+      for (int deckNumber = 0; deckNumber < NUMBER_OF_DECKS; deckNumber++) {
+         for (String suit : SUITS) {
+            for (String rank : RANKS) {
+               cards.add(new Card(rank, suit));
+            }
          }
       }
       Collections.shuffle(cards);

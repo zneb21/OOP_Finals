@@ -38,13 +38,21 @@ public class GameWindow extends JFrame implements ActionListener {
    private JLabel statsLabel;
    private JLabel dealerLabel;
    private JLabel playerLabel;
+   private JLabel splitLabel;
    private JLabel messageLabel;
    private JLabel deckLabel;
+   private JLabel modeLabel;
    private JTextArea historyArea;
 
    // Areas where the cards are shown
    private JPanel dealerCardsPanel;
    private JPanel playerCardsPanel;
+   private JPanel splitCardsPanel;
+   private JPanel aiPlayersPanel;
+   private JPanel dealerSeat;
+   private JPanel middlePanel;
+   private ArrayList<JLabel> seatLabels;
+   private ArrayList<JPanel> seatCardsPanels;
 
    // Buttons
    private JButton chip10Button;
@@ -56,13 +64,24 @@ public class GameWindow extends JFrame implements ActionListener {
    private JButton hitButton;
    private JButton standButton;
    private JButton doubleButton;
+   private JButton splitButton;
    private JButton newGameButton;
    private JButton howToPlayButton;
 
    private Timer dealerTimer;   // makes the dealer draw one card at a time
+   private Timer aiTimer;
 
    public GameWindow(String playerName) {
-      game = new BlackjackGame(playerName);
+      this(playerName, "Vs AI Table");
+   }
+
+   public GameWindow(String playerName, String mode) {
+      this(playerName, mode, 2);
+   }
+
+   public GameWindow(String playerName, String mode, int humanSeat) {
+      boolean vsAi = "Vs AI Table".equalsIgnoreCase(mode);
+      game = new BlackjackGame(playerName, vsAi, humanSeat);
       pendingBet = 0;
 
       setTitle("Blackjack");
@@ -78,6 +97,12 @@ public class GameWindow extends JFrame implements ActionListener {
 
       // Every 800 milliseconds the timer calls actionPerformed() during the dealer's turn.
       dealerTimer = new Timer(800, this);
+      aiTimer = new Timer(600, event -> {
+         game.playAiStep();
+         updateScreen();
+      });
+
+      modeLabel.setText(mode.toUpperCase());
 
       updateScreen();
    }
@@ -98,6 +123,8 @@ public class GameWindow extends JFrame implements ActionListener {
       balanceLabel = createLabel("", 18, GOLD);
       betLabel = createLabel("", 18, Color.WHITE);
       statsLabel = createLabel("", 16, Color.LIGHT_GRAY);
+      modeLabel = createLabel("", 12, SOFT_WHITE);
+      info.add(modeLabel);
       info.add(balanceLabel);
       info.add(betLabel);
       info.add(statsLabel);
@@ -107,18 +134,23 @@ public class GameWindow extends JFrame implements ActionListener {
       return bar;
    }
 
-   // The green table, split into 3 rows: dealer, message, player.
+   // The table is laid out like a casino table: dealer at the top, four seats
+   // around the arc, and the human player at the bottom.
    private JPanel createTable() {
-      JPanel table = new JPanel(new GridLayout(3, 1));
-      table.setBackground(TABLE_GREEN);
-      table.setBorder(BorderFactory.createEmptyBorder(16, 24, 16, 24));
+      CasinoTablePanel table = new CasinoTablePanel();
 
       dealerLabel = createLabel("DEALER", 18, Color.WHITE);
       dealerCardsPanel = createCardsArea();
-      table.add(createHandArea(dealerLabel, dealerCardsPanel));
+      dealerSeat = createHandArea(dealerLabel, dealerCardsPanel);
+      table.add(dealerSeat);
+      splitLabel = createLabel("", 10, SOFT_WHITE);
+      splitCardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, -3, 0));
+      splitCardsPanel.setOpaque(false);
+      aiPlayersPanel = createSeatRow();
+      table.add(aiPlayersPanel);
 
-      JPanel middle = new JPanel(new GridLayout(2, 1));
-      middle.setBackground(TABLE_GREEN);
+      middlePanel = new JPanel(new GridLayout(2, 1));
+      middlePanel.setOpaque(false);
       messageLabel = createLabel("", 30, GOLD);
       messageLabel.setFont(new Font("Georgia", Font.BOLD, 32));
       messageLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -127,20 +159,49 @@ public class GameWindow extends JFrame implements ActionListener {
       rulesLabel.setHorizontalAlignment(SwingConstants.CENTER);
       rulesLabel.setVerticalAlignment(SwingConstants.TOP);
       rulesLabel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
-      middle.add(messageLabel);
-      middle.add(rulesLabel);
-      table.add(middle);
+      middlePanel.add(messageLabel);
+      middlePanel.add(rulesLabel);
+      table.add(middlePanel);
 
-      playerLabel = createLabel("", 18, Color.WHITE);
-      playerCardsPanel = createCardsArea();
-      table.add(createHandArea(playerLabel, playerCardsPanel));
+      playerLabel = seatLabels.get(game.getHumanSeat());
+      playerCardsPanel = seatCardsPanels.get(game.getHumanSeat());
       return table;
+   }
+
+   private JPanel createSeatRow() {
+      JPanel panel = new JPanel(new GridLayout(1, game.isVsAiTable() ? 5 : 1, 5, 0));
+      panel.setOpaque(false);
+      panel.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+      seatLabels = new ArrayList<>();
+      seatCardsPanels = new ArrayList<>();
+      for (Participant participant : game.getSeats()) {
+         JPanel seat = new JPanel(new BorderLayout(0, 2));
+         seat.setOpaque(false);
+         JLabel label = createLabel("", 12, SOFT_WHITE);
+         label.setHorizontalAlignment(SwingConstants.CENTER);
+         JPanel cards = new JPanel(new FlowLayout(FlowLayout.CENTER, -3, 1));
+         cards.setOpaque(false);
+         seatLabels.add(label);
+         seatCardsPanels.add(cards);
+         seat.add(label, BorderLayout.NORTH);
+         seat.add(cards, BorderLayout.CENTER);
+         if (participant == game.getPlayer()) {
+            JPanel splitArea = new JPanel(new BorderLayout());
+            splitArea.setOpaque(false);
+            splitLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            splitArea.add(splitLabel, BorderLayout.NORTH);
+            splitArea.add(splitCardsPanel, BorderLayout.CENTER);
+            seat.add(splitArea, BorderLayout.SOUTH);
+         }
+         panel.add(seat);
+      }
+      return panel;
    }
 
    // One hand on the table: the name and score on top, the cards below.
    private JPanel createHandArea(JLabel label, JPanel cardsPanel) {
       JPanel area = new JPanel(new BorderLayout());
-      area.setBackground(TABLE_GREEN);
+      area.setOpaque(false);
       label.setHorizontalAlignment(SwingConstants.CENTER);
       area.add(label, BorderLayout.NORTH);
       area.add(cardsPanel, BorderLayout.CENTER);
@@ -149,7 +210,7 @@ public class GameWindow extends JFrame implements ActionListener {
 
    private JPanel createCardsArea() {
       JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
-      cardsPanel.setBackground(TABLE_GREEN);
+      cardsPanel.setOpaque(false);
       return cardsPanel;
    }
 
@@ -203,12 +264,14 @@ public class GameWindow extends JFrame implements ActionListener {
       hitButton = createButton("HIT", new Color(35, 150, 90));
       standButton = createButton("STAND", new Color(190, 50, 55));
       doubleButton = createButton("DOUBLE", new Color(45, 105, 190));
+      splitButton = createButton("SPLIT", new Color(125, 85, 180));
       newGameButton = createButton("NEW GAME", new Color(200, 150, 40));
       howToPlayButton = createButton("HOW TO PLAY", new Color(95, 95, 100));
       actionArea.add(dealButton);
       actionArea.add(hitButton);
       actionArea.add(standButton);
       actionArea.add(doubleButton);
+      actionArea.add(splitButton);
       actionArea.add(newGameButton);
       actionArea.add(howToPlayButton);
 
@@ -262,6 +325,8 @@ public class GameWindow extends JFrame implements ActionListener {
          game.stand();
       } else if (source == doubleButton) {
          doubleDown();
+      } else if (source == splitButton) {
+         split();
       } else if (source == newGameButton) {
          game.resetGame();
          pendingBet = 0;
@@ -285,6 +350,10 @@ public class GameWindow extends JFrame implements ActionListener {
    }
 
    private void deal() {
+      if (game.needsReshuffle()) {
+         showReshuffleScreen();
+         return;
+      }
       try {
          game.startRound(pendingBet);
       } catch (InvalidBetException ex) {
@@ -292,9 +361,47 @@ public class GameWindow extends JFrame implements ActionListener {
       }
    }
 
+   private void showReshuffleScreen() {
+      final javax.swing.JDialog loading = new javax.swing.JDialog(this, "", true);
+      loading.setUndecorated(true);
+      loading.setSize(330, 145);
+      loading.setLocationRelativeTo(this);
+      JPanel panel = new JPanel(new BorderLayout());
+      panel.setBackground(SIDE_GREEN);
+      panel.setBorder(BorderFactory.createLineBorder(GOLD, 2));
+      JLabel title = createLabel("RE-SHUFFLING THE DECK", 19, GOLD);
+      title.setHorizontalAlignment(SwingConstants.CENTER);
+      JLabel detail = createLabel("Please wait...", 14, SOFT_WHITE);
+      detail.setHorizontalAlignment(SwingConstants.CENTER);
+      panel.add(title, BorderLayout.CENTER);
+      panel.add(detail, BorderLayout.SOUTH);
+      loading.add(panel);
+
+      Timer reshuffleTimer = new Timer(950, event -> {
+         game.reshuffle();
+         loading.dispose();
+         try {
+            game.startRound(pendingBet);
+         } catch (InvalidBetException ex) {
+            showWarning(ex.getMessage());
+         }
+      });
+      reshuffleTimer.setRepeats(false);
+      reshuffleTimer.start();
+      loading.setVisible(true);
+   }
+
    private void doubleDown() {
       try {
          game.doubleDown();
+      } catch (InvalidBetException ex) {
+         showWarning(ex.getMessage());
+      }
+   }
+
+   private void split() {
+      try {
+         game.split();
       } catch (InvalidBetException ex) {
          showWarning(ex.getMessage());
       }
@@ -334,6 +441,8 @@ public class GameWindow extends JFrame implements ActionListener {
             + "- STAND: keep your cards and end your turn.\n"
             + "- DOUBLE: double your bet, take exactly 1 more card, then stand.\n"
             + "  (Only allowed with your first 2 cards.)\n"
+            + "- SPLIT: if your first two cards have the same rank, split them into\n"
+            + "  two hands. Each hand gets its own equal bet and is played separately.\n"
             + "If your total goes over 21, you BUST and lose your bet.\n\n"
             + "STEP 4 - DEALER'S TURN\n"
             + "The dealer shows the hidden card, then must keep taking cards\n"
@@ -369,8 +478,9 @@ public class GameWindow extends JFrame implements ActionListener {
       statsLabel.setText("Wins " + game.getWins() + "   Losses " + game.getLosses() + "   Pushes " + game.getPushes());
       deckLabel.setText("Cards left in deck: " + game.getCardsLeft());
 
-      showHand(dealerLabel, dealerCardsPanel, game.getDealer());
-      showHand(playerLabel, playerCardsPanel, player);
+      showHand(dealerLabel, dealerCardsPanel, game.getDealer(), false);
+      showSeatHands();
+      showSplitHand();
       showMessage();
       showHistory();
       updateButtons();
@@ -378,14 +488,39 @@ public class GameWindow extends JFrame implements ActionListener {
       if (game.isDealerTurn() && !dealerTimer.isRunning()) {
          dealerTimer.start();
       }
+      if (game.isAiTurn() && !aiTimer.isRunning()) aiTimer.start();
+      if (!game.isAiTurn() && aiTimer.isRunning()) aiTimer.stop();
+   }
+
+   private void showSeatHands() {
+      ArrayList<Participant> seats = game.getSeats();
+      for (int i = 0; i < seats.size(); i++) {
+         JLabel label = seatLabels.get(i);
+         label.setForeground(game.isRoundActive() && game.getActiveSeat() == seats.get(i) ? GOLD : SOFT_WHITE);
+         showHand(label, seatCardsPanels.get(i), seats.get(i), true);
+      }
+      aiPlayersPanel.revalidate();
+      aiPlayersPanel.repaint();
    }
 
    // Works for both the Player and the Dealer, because both are Participants.
    // getScoreText() runs the Dealer's version or the Player's version (polymorphism).
-   private void showHand(JLabel label, JPanel cardsPanel, Participant participant) {
-      cardsPanel.removeAll();
-      for (Card card : participant.getHand().getCards()) {
-         cardsPanel.add(new CardPanel(card));
+   private void showHand(JLabel label, JPanel cardsPanel, Participant participant, boolean compact) {
+      ArrayList<Card> cards = participant.getHand().getCards();
+
+      // Reuse existing card panels. This prevents old cards from flipping again
+      // every time the screen refreshes after HIT, STAND, or a dealer timer tick.
+      while (cardsPanel.getComponentCount() > cards.size()) {
+         cardsPanel.remove(cardsPanel.getComponentCount() - 1);
+      }
+      for (int i = 0; i < cards.size(); i++) {
+         if (i < cardsPanel.getComponentCount()) {
+            CardPanel cardPanel = (CardPanel) cardsPanel.getComponent(i);
+            cardPanel.updateCard(cards.get(i), 0);
+         } else {
+            // Only a newly added card gets the deal animation.
+            cardsPanel.add(new CardPanel(cards.get(i), i * 180, compact));
+         }
       }
       cardsPanel.revalidate();
       cardsPanel.repaint();
@@ -443,6 +578,86 @@ public class GameWindow extends JFrame implements ActionListener {
       hitButton.setEnabled(game.isPlayerTurn());
       standButton.setEnabled(game.isPlayerTurn());
       doubleButton.setEnabled(game.canDoubleDown());
+      splitButton.setEnabled(game.canSplit());
       newGameButton.setEnabled(game.isGameOver());
+   }
+
+   private void showSplitHand() {
+      boolean visible = game.hasSplitHand();
+      splitLabel.setVisible(visible);
+      splitCardsPanel.setVisible(visible);
+      if (visible) {
+         ArrayList<Card> cards = game.getPlayer().getSplitHand().getCards();
+         while (splitCardsPanel.getComponentCount() > cards.size()) {
+            splitCardsPanel.remove(splitCardsPanel.getComponentCount() - 1);
+         }
+         for (int i = 0; i < cards.size(); i++) {
+            if (i < splitCardsPanel.getComponentCount()) {
+               ((CardPanel) splitCardsPanel.getComponent(i)).updateCard(cards.get(i), 0);
+            } else {
+               splitCardsPanel.add(new CardPanel(cards.get(i), i * 180, true));
+            }
+         }
+         splitLabel.setText("SPLIT HAND   " + game.getPlayer().getSplitHand().getTotal()
+               + "   Bet: " + game.getPlayer().getSplitBet());
+      } else {
+         splitLabel.setText("");
+         splitCardsPanel.removeAll();
+      }
+      splitCardsPanel.revalidate();
+      splitCardsPanel.repaint();
+   }
+
+   // Paints the felt, the betting arc, and the center rule text behind the
+   // transparent seat panels. The seats are positioned in doLayout so the
+   // table remains usable when the window is resized.
+   private class CasinoTablePanel extends JPanel {
+      private final Color FELT = new Color(18, 91, 67);
+      private final Color FELT_DARK = new Color(11, 65, 51);
+      private final Color TABLE_LINE = new Color(195, 211, 192);
+
+      CasinoTablePanel() {
+         setOpaque(true);
+         setBackground(FELT_DARK);
+      }
+
+      @Override
+      protected void paintComponent(java.awt.Graphics graphics) {
+         super.paintComponent(graphics);
+         java.awt.Graphics2D g = (java.awt.Graphics2D) graphics.create();
+         g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+               java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+
+         int w = getWidth();
+         int h = getHeight();
+         g.setColor(FELT);
+         g.fillRoundRect(12, 12, w - 24, h - 24, 70, 70);
+
+         g.setColor(new Color(7, 52, 42));
+         g.fillRoundRect(28, 28, w - 56, h - 56, 60, 60);
+         g.setColor(FELT);
+         g.fillRoundRect(34, 34, w - 68, h - 68, 56, 56);
+
+         g.setColor(TABLE_LINE);
+         g.setStroke(new java.awt.BasicStroke(2.2f));
+         g.drawArc(55, 72, w - 110, h - 35, 12, 156);
+         g.setColor(new Color(135, 165, 151));
+         g.setStroke(new java.awt.BasicStroke(1.2f));
+         g.drawArc(74, 88, w - 148, h - 60, 12, 156);
+
+         g.dispose();
+      }
+
+      @Override
+      public void doLayout() {
+         int w = getWidth();
+         int h = getHeight();
+         int sideMargin = Math.max(15, w / 45);
+
+         dealerSeat.setBounds(w / 2 - 155, 8, 310, 178);
+         aiPlayersPanel.setBounds(sideMargin, 170, w - sideMargin * 2, 178);
+         middlePanel.setBounds(w / 2 - 260, 330, 520, 100);
+         aiPlayersPanel.setBounds(18, Math.max(425, h - 178), w - 36, 168);
+      }
    }
 }

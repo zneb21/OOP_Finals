@@ -1,15 +1,10 @@
-import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 
 // Starting point of the program. Run this file to play.
 public class Main {
    public static void main(String[] args) {
-      String name = JOptionPane.showInputDialog("Enter your name:");
-      if (name == null || name.trim().isEmpty()) {
-         name = "Player";
-      }
-
-      GameWindow window = new GameWindow(name.trim());
-      window.setVisible(true);
-      window.showHowToPlay();
+      SwingUtilities.invokeLater(() -> {
+         new StartWindow().setVisible(true);
+      });
    }
 }

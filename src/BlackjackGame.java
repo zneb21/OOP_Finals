@@ -4,24 +4,62 @@ import java.util.ArrayList;
 // This class has no GUI code, so the rules can be tested on their own.
 public class BlackjackGame {
    public static final int STARTING_CHIPS = 1000;
-   private static final int RESHUFFLE_LIMIT = 15;   // shuffle a new deck when fewer cards are left
+   private static final int RESHUFFLE_LIMIT = 30;   // reserve enough cards for a full table round
+   private static final int AI_PLAYER_COUNT = 4;
 
    private Deck deck;
    private Player player;
    private Dealer dealer;
+   private ArrayList<AIPlayer> aiPlayers;
+   private ArrayList<Participant> seats;
+   private int humanSeat;
+   private int activeSeat;
+   private boolean vsAiTable;
    private ArrayList<RoundResult> history;
    private boolean roundActive;   // true from the deal until the round is settled
    private boolean playerTurn;
+   private boolean splitTurn;
+   private boolean aiTurn;
+   private boolean dealerPhase;
    private int roundNumber;
    private String message;
 
    public BlackjackGame(String playerName) {
+      this(playerName, false);
+   }
+
+   public BlackjackGame(String playerName, boolean vsAiTable) {
+      this(playerName, vsAiTable, 2);
+   }
+
+   public BlackjackGame(String playerName, boolean vsAiTable, int humanSeat) {
       deck = new Deck();
       player = new Player(playerName, STARTING_CHIPS);
       dealer = new Dealer();
+      this.vsAiTable = vsAiTable;
+      this.humanSeat = vsAiTable ? Math.max(0, Math.min(4, humanSeat)) : 0;
+      aiPlayers = new ArrayList<>();
+      seats = new ArrayList<>();
+      if (vsAiTable) {
+         int aiNumber = 1;
+         for (int seat = 0; seat < AI_PLAYER_COUNT + 1; seat++) {
+            if (seat == this.humanSeat) {
+               seats.add(player);
+            } else {
+               AIPlayer ai = new AIPlayer("AI " + aiNumber++);
+               aiPlayers.add(ai);
+               seats.add(ai);
+            }
+         }
+      } else {
+         seats.add(player);
+      }
       history = new ArrayList<>();
       roundActive = false;
       playerTurn = false;
+      splitTurn = false;
+      aiTurn = false;
+      dealerPhase = false;
       roundNumber = 0;
       message = "Place your bet to begin";
    }
@@ -32,6 +70,44 @@ public class BlackjackGame {
 
    public Dealer getDealer() {
       return dealer;
+   }
+
+   public ArrayList<AIPlayer> getAiPlayers() {
+      return new ArrayList<>(aiPlayers);
+   }
+
+   public ArrayList<Participant> getSeats() {
+      return new ArrayList<>(seats);
+   }
+
+   public boolean isVsAiTable() {
+      return vsAiTable;
+   }
+
+   public int getHumanSeat() {
+      return humanSeat;
+   }
+
+   public boolean isAiTurn() {
+      return aiTurn;
+   }
+
+   public Participant getActiveSeat() {
+      return activeSeat >= 0 && activeSeat < seats.size() ? seats.get(activeSeat) : null;
+   }
+
+   public String getActiveSeatName() {
+      Participant active = getActiveSeat();
+      return roundActive && active != null ? active.getName() : "";
+   }
+
+   public boolean needsReshuffle() {
+      return deck.cardsLeft() < RESHUFFLE_LIMIT;
+   }
+
+   public void reshuffle() {
+      deck.reset();
+      message = "Place your bet to begin";
    }
 
    public int getCardsLeft() {
@@ -47,7 +123,22 @@ public class BlackjackGame {
    }
 
    public boolean isDealerTurn() {
-      return roundActive && !playerTurn;
+      return roundActive && dealerPhase;
+   }
+
+   public boolean hasSplitHand() {
+      return player.hasSplitHand();
+   }
+
+   public boolean isSplitTurn() {
+      return playerTurn && splitTurn;
+   }
+
+   public boolean canSplit() {
+      return playerTurn && !player.hasSplitHand() && player.getHand().size() == 2
+            && player.getHand().getCards().get(0).getRank()
+                  .equals(player.getHand().getCards().get(1).getRank())
+            && player.getBet() <= player.getChips();
    }
 
    public int getRoundNumber() {
@@ -109,26 +200,78 @@ public class BlackjackGame {
 
       player.clearHand();
       dealer.clearHand();
-      if (deck.cardsLeft() < RESHUFFLE_LIMIT) {
-         deck.reset();
-      }
+      // The window shows the re-shuffling screen before calling this method
+      // when the shoe is low, so this round always starts with a full shoe.
 
-      // Deal two cards each. The dealer's second card (the "hole card") is face down.
-      player.takeCard(deck.drawCard());
+      // Deal the dealer separately so its second card can stay hidden. The
+      // player and AI seats are dealt exactly two cards in the seat loop below.
       dealer.takeCard(deck.drawCard());
-      player.takeCard(deck.drawCard());
       Card holeCard = deck.drawCard();
       holeCard.setFaceUp(false);
       dealer.takeCard(holeCard);
 
+      for (AIPlayer aiPlayer : aiPlayers) {
+         aiPlayer.clearHand();
+      }
+      for (Participant seat : seats) {
+         seat.takeCard(deck.drawCard());
+         seat.takeCard(deck.drawCard());
+      }
+
       roundNumber++;
       roundActive = true;
-      playerTurn = true;
-      message = "Hit or Stand?";
+      playerTurn = false;
+      splitTurn = false;
+      aiTurn = false;
+      dealerPhase = false;
+      activeSeat = 0;
+      message = "Players take turns by seat";
 
       // If anyone has Blackjack, the round ends right away.
-      if (player.getHand().isBlackjack() || dealer.getHand().isBlackjack()) {
+      if (dealer.getHand().isBlackjack()) {
+         dealerPhase = true;
          finishRound();
+      } else {
+         advanceSeat();
+      }
+   }
+
+   private void advanceSeat() {
+      playerTurn = false;
+      aiTurn = false;
+      while (activeSeat < seats.size()) {
+         Participant current = seats.get(activeSeat);
+         if (current == player) {
+            if (player.getHand().isBlackjack()) {
+               activeSeat++;
+               continue;
+            }
+            playerTurn = true;
+            message = player.getName() + "'s turn — Hit or Stand?";
+            return;
+         }
+         if (current instanceof AIPlayer && !current.getHand().isBlackjack()) {
+            aiTurn = true;
+            message = current.getName() + "'s turn";
+            return;
+         }
+         activeSeat++;
+      }
+      dealerPhase = true;
+      dealer.revealHoleCard();
+      message = "Dealer's turn";
+   }
+
+   // One card per tick lets the UI show each AI turn in seat order.
+   public void playAiStep() {
+      if (!roundActive || !aiTurn) return;
+      AIPlayer current = (AIPlayer) seats.get(activeSeat);
+      if (current.canHit()) {
+         current.takeCard(deck.drawCard());
+      }
+      if (!current.canHit()) {
+         activeSeat++;
+         advanceSeat();
       }
    }
 
@@ -136,11 +279,15 @@ public class BlackjackGame {
       if (!playerTurn) {
          return;
       }
-      player.takeCard(deck.drawCard());
-      if (player.getHand().isBust()) {
-         finishRound();
-      } else if (!player.canHit()) {
-         stand();   // reached 21, nothing better to do
+      Hand activeHand = splitTurn ? player.getSplitHand() : player.getHand();
+      activeHand.addCard(deck.drawCard());
+      if (activeHand.isBust()) {
+         if (!splitTurn && player.hasSplitHand()) {
+            stand();
+         } else {
+            activeSeat++;
+            advanceSeat();
+         }
       }
    }
 
@@ -149,15 +296,42 @@ public class BlackjackGame {
       if (!playerTurn) {
          return;
       }
-      player.stand();
+      if (!splitTurn && player.hasSplitHand()) {
+         player.stand();
+         splitTurn = true;
+         message = "Play your split hand";
+         return;
+      }
+      if (splitTurn) {
+         player.standSplit();
+      } else {
+         player.stand();
+      }
       playerTurn = false;
-      dealer.revealHoleCard();
-      message = "Dealer's turn";
+      activeSeat++;
+      advanceSeat();
    }
 
    // Double down is only allowed on the first two cards.
    public boolean canDoubleDown() {
-      return playerTurn && player.getHand().size() == 2;
+      Hand activeHand = splitTurn ? player.getSplitHand() : player.getHand();
+      int activeBet = splitTurn ? player.getSplitBet() : player.getBet();
+      return playerTurn && activeHand.size() == 2 && activeBet <= player.getChips();
+   }
+
+   public void split() throws InvalidBetException {
+      if (!canSplit()) {
+         return;
+      }
+      player.placeSplitBet();
+      Card firstCard = player.getHand().getCards().get(0);
+      Card secondCard = player.getHand().getCards().get(1);
+      player.getHand().clear();
+      player.takeCard(firstCard);
+      player.getSplitHand().addCard(new Card(secondCard.getRank(), secondCard.getSuit()));
+      player.takeCard(deck.drawCard());
+      player.getSplitHand().addCard(deck.drawCard());
+      message = "Play your first hand";
    }
 
    // Doubles the bet, takes exactly one more card, then stands.
@@ -165,10 +339,16 @@ public class BlackjackGame {
       if (!canDoubleDown()) {
          return;
       }
-      player.doubleBet();
-      player.takeCard(deck.drawCard());
-      if (player.getHand().isBust()) {
-         finishRound();
+      Hand activeHand = splitTurn ? player.getSplitHand() : player.getHand();
+      if (splitTurn) {
+         player.doubleSplitBet();
+      } else {
+         player.doubleBet();
+      }
+      activeHand.addCard(deck.drawCard());
+      if (activeHand.isBust()) {
+         if (!splitTurn && player.hasSplitHand()) stand();
+         else { activeSeat++; advanceSeat(); }
       } else {
          stand();
       }
@@ -187,6 +367,9 @@ public class BlackjackGame {
 
    // Plays the whole dealer turn at once (used by TestCases).
    public void playDealerTurn() {
+      if (!isDealerTurn()) {
+         return;
+      }
       while (dealerShouldHit()) {
          dealerHit();
       }
@@ -195,46 +378,42 @@ public class BlackjackGame {
 
    // Compares the hands, pays the player, and saves the result.
    public void finishRound() {
-      if (!roundActive) {
+      if (!roundActive || !dealerPhase) {
          return;
       }
+
+      // A round may finish during the initial deal, after a bust, or after the
+      // dealer has completed their turn. Ignore calls from any other phase.
+      if (dealer.canHit() && !dealer.getHand().isBlackjack()) {
+         return;
+      }
+
       roundActive = false;
       playerTurn = false;
       dealer.revealHoleCard();
 
       Hand playerHand = player.getHand();
       Hand dealerHand = dealer.getHand();
-      int bet = player.getBet();
-      int payout;   // chips given back to the player, including the original bet
-
-      if (playerHand.isBust()) {
-         payout = 0;
-         message = "Bust! You lose";
-      } else if (playerHand.isBlackjack() && dealerHand.isBlackjack()) {
-         payout = bet;
-         message = "Both have Blackjack - Push";
-      } else if (playerHand.isBlackjack()) {
-         payout = bet + (bet * 3) / 2;   // Blackjack pays 3 to 2
-         message = "Blackjack! You win";
-      } else if (dealerHand.isBlackjack()) {
-         payout = 0;
-         message = "Dealer has Blackjack";
-      } else if (dealerHand.isBust()) {
-         payout = bet * 2;
-         message = "Dealer busts! You win";
-      } else if (playerHand.getTotal() > dealerHand.getTotal()) {
-         payout = bet * 2;
-         message = "You win!";
-      } else if (playerHand.getTotal() < dealerHand.getTotal()) {
-         payout = 0;
-         message = "Dealer wins";
-      } else {
-         payout = bet;
-         message = "Push - bet returned";
+      int totalChange = settleHand(playerHand, player.getBet(), dealerHand, !player.hasSplitHand());
+      player.collectPayout(settlePayout(playerHand, player.getBet(), dealerHand, !player.hasSplitHand()));
+      if (player.hasSplitHand()) {
+         totalChange += settleHand(player.getSplitHand(), player.getSplitBet(), dealerHand, false);
+         player.collectSplitPayout(settlePayout(player.getSplitHand(), player.getSplitBet(), dealerHand, false));
       }
+      message = totalChange >= 0 ? "Round complete" : "Round complete - you lose";
+      history.add(0, new RoundResult(roundNumber, message, totalChange));
+   }
 
-      player.collectPayout(payout);
-      history.add(0, new RoundResult(roundNumber, message, payout - bet));
+   private int settlePayout(Hand playerHand, int bet, Hand dealerHand, boolean allowBlackjackPayout) {
+      if (playerHand.isBust() || dealerHand.isBlackjack()) return 0;
+      if (allowBlackjackPayout && playerHand.isBlackjack()) return bet + (bet * 3) / 2;
+      if (dealerHand.isBust() || playerHand.getTotal() > dealerHand.getTotal()) return bet * 2;
+      if (playerHand.getTotal() == dealerHand.getTotal()) return bet;
+      return 0;
+   }
+
+   private int settleHand(Hand playerHand, int bet, Hand dealerHand, boolean allowBlackjackPayout) {
+      return settlePayout(playerHand, bet, dealerHand, allowBlackjackPayout) - bet;
    }
 
    // Starts over with full chips after the player runs out.
@@ -242,10 +421,16 @@ public class BlackjackGame {
       player.resetChips(STARTING_CHIPS);
       player.clearHand();
       dealer.clearHand();
+      for (AIPlayer aiPlayer : aiPlayers) {
+         aiPlayer.clearHand();
+      }
       deck.reset();
       history.clear();
       roundActive = false;
       playerTurn = false;
+      splitTurn = false;
+      aiTurn = false;
+      dealerPhase = false;
       roundNumber = 0;
       message = "Place your bet to begin";
    }

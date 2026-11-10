@@ -8,6 +8,9 @@ public class TestCases {
       System.out.println("BLACKJACK TEST CASES");
       System.out.println("====================");
 
+      Deck twoDecks = new Deck();
+      check("Two decks contain 104 cards", "104", String.valueOf(twoDecks.cardsLeft()));
+
       // 1-3: hand totals and Aces
       Hand hand1 = new Hand();
       hand1.addCard(new Card("A", "Spades"));
